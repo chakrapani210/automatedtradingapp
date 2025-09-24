@@ -1,0 +1,6 @@
+backtrader
+pandas
+yfinance
+pypfopt
+quantlib
+optopsy
