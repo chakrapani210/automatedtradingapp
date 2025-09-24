@@ -3,8 +3,10 @@ import pandas as pd
 
 class DataAcquisition:
     @staticmethod
-    def get_stock_data(ticker, start, end, interval='1d'):
-        data = yf.download(ticker, start=start, end=end, interval=interval)
+    def get_stock_data(tickers, start, end, interval='1d'):
+        if isinstance(tickers, str):
+            tickers = [tickers]
+        data = yf.download(tickers, start=start, end=end, interval=interval, group_by='ticker', auto_adjust=True)
         return data
 
     @staticmethod

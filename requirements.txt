@@ -1,6 +1,6 @@
 backtrader
 pandas
 yfinance
-pypfopt
+PyPortfolioOpt
 quantlib
 optopsy

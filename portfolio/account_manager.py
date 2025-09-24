@@ -1,10 +1,7 @@
-class AccountManager:
-    def __init__(self, initial_balance=100000):
-        self.balance = initial_balance
-        self.positions = {}
-
-    def update_balance(self, pnl):
-        self.balance += pnl
-
-    def update_position(self, symbol, qty):
-        self.positions[symbol] = self.positions.get(symbol, 0) + qty
+"""
+This module is now deprecated. Use Backtrader's built-in broker and position management:
+    - self.broker.getvalue() for portfolio value
+    - self.broker.getcash() for cash
+    - self.getposition(data) for position info
+    - self.broker.pnl for P&L (if needed)
+"""

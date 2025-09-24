@@ -1,5 +1,2 @@
-import os
 
-class Config:
-    DATA_PATH = os.getenv('DATA_PATH', './data')
-    INITIAL_BALANCE = float(os.getenv('INITIAL_BALANCE', 100000))
+# Config class removed. Use AppConfig from utils/app_config.py instead.
