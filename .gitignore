@@ -1,0 +1,7 @@
+__pycache__/
+backtest_results/
+test_output/
+*.pyc
+*.pyo
+.DS_Store
+*.log

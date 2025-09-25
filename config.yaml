@@ -10,25 +10,122 @@ end_date: '2023-01-01'
 initial_cash: 100000
 risk_free_rate: 0.0
 
+# Portfolio Allocation
+portfolio_allocation:
+  long_term: 0.50    # 50% for long-term value investing
+  short_term: 0.25   # 25% for short-term trading
+  options: 0.25      # 25% for options trading
+
 # Strategy Parameters
-strategy:
-  # Moving Average Parameters
-  sma_window: 50          # Medium-term SMA window (50-day standard)
-  sma_long_window: 200    # Long-term SMA window (200-day standard for major trends)
-  
-  # Risk Management Parameters
-  risk_per_trade: 0.02    # Maximum risk per trade (2% of portfolio)
-  max_position_size: 0.2  # Maximum size of any single position (20% of portfolio)
-  max_drawdown: 0.10     # Maximum drawdown allowed per trade (10%)
-  stop_loss_atr_multiplier: 2.0  # ATR multiplier for stop loss calculation
-  
-  # Technical Indicators
-  rsi_window: 14         # RSI lookback period
-  rsi_oversold: 30       # RSI oversold level for buy signals
-  rsi_overbought: 70     # RSI overbought level for sell signals
-  
-  # Position Sizing and Volatility
-  atr_window: 14         # ATR period for volatility-based position sizing
-  atr_risk_factor: 2     # Multiple of ATR to use for risk calculation
-  trailing_stop: false    # Enable/disable trailing stop losses
-  trailing_stop_atr: 3   # ATR multiplier for trailing stop (if enabled)
+strategies:
+  long_term:
+    # Value Investing Parameters
+    pe_ratio_max: 25.0        # Maximum P/E ratio for value stocks
+    pb_ratio_max: 3.0         # Maximum P/B ratio
+    dividend_yield_min: 0.02   # Minimum dividend yield (2%)
+    market_cap_min: 10000000000  # Minimum market cap ($10B)
+    
+    # Long-term Trend Following
+    sma_window: 50           # 50-day SMA
+    sma_long_window: 200     # 200-day SMA (Golden/Death Cross)
+    monthly_rebalance: true  # Rebalance monthly
+    
+    # Volume Analysis (Long Term)
+    volume_ma_window: 50     # 50-day volume moving average
+    volume_breakout_mult: 2.0  # Volume breakout multiplier
+    adl_ma_window: 50       # ADL moving average window
+    vpt_change_threshold: 0.02  # VPT minimum change threshold
+    volume_trend_threshold: 1.2  # Volume trend confirmation threshold
+    institutional_volume_threshold: 1000000  # Minimum daily volume for institutional interest
+    
+    # Position Management
+    max_position_size: 0.15  # Max 15% in single position
+    stop_loss_percentage: 0.25  # 25% stop loss for long-term positions
+    position_scaling: true   # Enable position scaling based on volume
+    
+    short_term:
+    # Technical Analysis Parameters
+    sma_window: 10          # Short-term SMA
+    sma_long_window: 20     # Medium-term SMA
+    rsi_window: 14          # RSI period
+    rsi_oversold: 30        # RSI oversold level
+    rsi_overbought: 70      # RSI overbought level
+    
+    # Volume Analysis (Short Term)
+    obv_ma_window: 20       # OBV moving average window
+    volume_ma_window: 20    # Volume moving average window
+    mfi_period: 14         # Money Flow Index period
+    mfi_oversold: 20       # MFI oversold level
+    mfi_overbought: 80     # MFI overbought level
+    cmf_fast_period: 3     # Chaikin Money Flow fast period
+    cmf_slow_period: 10    # Chaikin Money Flow slow period
+    
+    # Enhanced Volume Indicators
+    klinger_fast: 34       # Klinger Oscillator fast period
+    klinger_slow: 55       # Klinger Oscillator slow period
+    eom_period: 14        # Ease of Movement period
+    force_index_period: 13  # Force Index period
+    volume_intensity_window: 20  # Volume Intensity window
+    vwmacd_fast: 12       # Volume-Weighted MACD fast period
+    vwmacd_slow: 26       # Volume-Weighted MACD slow period
+    vwmacd_signal: 9      # Volume-Weighted MACD signal period
+    
+    # Volume Profile Settings
+    volume_profile_bins: 12  # Number of price bins for volume profile
+    volume_support_window: 20  # Window for volume-based support/resistance
+    volume_breakout_threshold: 2.0  # Volume multiple for breakout confirmation
+    
+    # Volume-Based Position Sizing
+    min_liquidity_score: 0.3   # Minimum liquidity score for trading
+    volume_risk_multiplier: 1.2  # Position size multiplier for high-volume signals
+    institutional_confirmation_periods: 5  # Periods to check for institutional activity
+    volume_trend_threshold: 1.5  # Volume trend confirmation threshold
+    position_lot_size: 100      # Standard lot size for position rounding
+    
+    # Advanced Volume Analysis
+    volume_zone_period: 14     # Period for Volume Zone Oscillator
+    relative_volume_window: 20  # Window for relative volume calculation
+    volume_volatility_window: 20  # Window for volume volatility calculation
+    intraday_intensity_period: 14  # Period for intraday intensity index
+    
+    # Visualization Settings
+    chart_height: 800          # Default chart height in pixels
+    volume_profile_opacity: 0.5  # Opacity for volume profile bars
+    chart_theme: "light"       # Chart theme (light/dark)
+    
+    # Mean Reversion
+    bollinger_period: 20    # Bollinger Bands period
+    bollinger_std: 2        # Standard deviation for bands
+    
+    # Advanced Volume Indicators
+    vwap_period: "D"       # VWAP calculation period (D=Daily)
+    volume_profile_bins: 12  # Number of bins for volume profile
+    
+    # Risk Management
+    risk_per_trade: 0.01    # 1% risk per trade
+    max_position_size: 0.10  # Max 10% in single position
+    stop_loss_atr: 2.0      # 2x ATR stop loss
+    trailing_stop: true     # Enable trailing stops
+    volume_based_sizing: true  # Adjust position size based on volume  options:
+    # Options Strategy Parameters
+    strategy_type: "iron_condor"  # Default strategy type
+    days_to_expiry_min: 30       # Minimum days to expiry
+    days_to_expiry_max: 45       # Maximum days to expiry
+    
+    # Iron Condor Parameters
+    delta_short: 0.16            # Delta for short strikes
+    delta_long: 0.08             # Delta for long strikes
+    profit_target_pct: 0.50      # Close at 50% max profit
+    stop_loss_pct: 0.75          # Stop loss at 75% max loss
+    
+    # Risk Management
+    max_position_size: 0.05      # Max 5% in single position
+    portfolio_margin_limit: 0.15  # Max 15% portfolio margin usage
+    
+# Global Risk Management
+risk_management:
+  max_portfolio_drawdown: 0.15    # 15% max portfolio drawdown
+  risk_free_rate: 0.0            # Risk-free rate for calculations
+  portfolio_var_limit: 0.02      # 2% daily VaR limit
+  correlation_threshold: 0.75     # Max correlation between positions
+  rebalance_frequency: "monthly"  # Portfolio rebalancing frequency

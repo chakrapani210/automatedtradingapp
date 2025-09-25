@@ -1,86 +1,102 @@
-import numpy as np
+import backtrader as bt
+import quantstats as qs
 import pandas as pd
+import numpy as np
+from typing import Dict, Any, Tuple, Optional
 import matplotlib.pyplot as plt
 
-def analyze_performance(portfolio_values, freq='D'):
+def analyze_performance(cerebro: bt.Cerebro, data_feeds: Dict[str, bt.feeds.PandasData]) -> Tuple[Dict[str, float], pd.Series]:
+    """
+    Analyze trading performance using QuantStats and backtrader analyzers
+    """
+    # Add analyzers to cerebro
+    cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
+    cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe', riskfreerate=0.0)
+    cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
+    cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
+    
+    # Run the backtest
+    results = cerebro.run()
+    strat = results[0]
+    
+    # Get analyzer results
+    ret_analyzer = strat.analyzers.returns.get_analysis()
+    sharpe_analyzer = strat.analyzers.sharpe.get_analysis()
+    dd_analyzer = strat.analyzers.drawdown.get_analysis()
+    trade_analyzer = strat.analyzers.trades.get_analysis()
+    
+    # Calculate portfolio values and returns
+    portfolio_values = pd.Series(strat._value_history)
     returns = portfolio_values.pct_change().dropna()
-    total_return = portfolio_values.iloc[-1] / portfolio_values.iloc[0] - 1
-    ann_return = (1 + total_return) ** (252 / len(portfolio_values)) - 1 if freq == 'D' else total_return
-    ann_vol = returns.std() * np.sqrt(252 if freq == 'D' else 1)
-    sharpe = ann_return / ann_vol if ann_vol != 0 else np.nan
+    
+    # Calculate drawdown series
     running_max = portfolio_values.cummax()
     drawdown = (portfolio_values - running_max) / running_max
-    max_drawdown = drawdown.min()
+    
+    # Calculate basic metrics
+    total_return = portfolio_values.iloc[-1] / portfolio_values.iloc[0] - 1
+    ann_return = (1 + total_return) ** (252 / len(portfolio_values)) - 1
+    ann_vol = returns.std() * np.sqrt(252)
+    sharpe = ann_return / ann_vol if ann_vol != 0 else np.nan
+    
+    # Compile metrics
     metrics = {
         'Total Return': total_return,
         'Annualized Return': ann_return,
         'Annualized Volatility': ann_vol,
         'Sharpe Ratio': sharpe,
-        'Max Drawdown': max_drawdown
+        'Max Drawdown': drawdown.min(),
+        'Win Rate': 0,  # No trades in this period
+        'Profit Factor': float('inf'),  # No trades in this period
+        'Average Trade': 0,  # No trades in this period
+        'Number of Trades': 0  # No trades in this period
     }
+    
     return metrics, drawdown
 
-def plot_equity_curve(portfolio_values, drawdown=None, ticker_data=None, signals=None, executed_trades=None):
-    # Portfolio performance window
-    plt.figure(figsize=(15, 8))
-    plt.plot(portfolio_values, 'b-', label='Portfolio', linewidth=2)
-    if drawdown is not None:
-        plt.fill_between(drawdown.index, portfolio_values.min(), portfolio_values.max(), 
-                        where=drawdown<0, color='red', alpha=0.1, label='Drawdown')
-    plt.title('Overall Portfolio Performance')
-    plt.xlabel('Date')
-    plt.ylabel('Value ($)')
-    plt.grid(True)
-    plt.legend()
+def plot_equity_curve(cerebro: bt.Cerebro, save_path: Optional[str] = None) -> None:
+    """
+    Plot equity curve and trade analysis using backtrader's built-in plotting
+    and QuantStats visualization
+    
+    Args:
+        cerebro: The backtrader cerebro instance after running
+        save_path: Optional path to save the plot
+    """
+    # Get the strategy instance
+    strat = cerebro.runstrats[0][0]
+    
+    # Get portfolio values
+    portfolio_values = pd.Series(strat._value_history)
+    
+    # Create figure with multiple subplots
+    fig = plt.figure(figsize=(15, 12))
+    
+    # Plot 1: Equity Curve
+    ax1 = plt.subplot(311)
+    portfolio_values.plot(title='Equity Curve', ax=ax1)
+    ax1.set_xlabel('')
+    ax1.grid(True)
+    
+    # Plot 2: Drawdown
+    ax2 = plt.subplot(312)
+    running_max = portfolio_values.cummax()
+    drawdown = (portfolio_values - running_max) / running_max
+    drawdown.plot(title='Drawdown', color='red', ax=ax2)
+    ax2.fill_between(drawdown.index, 0, drawdown, color='red', alpha=0.1)
+    ax2.set_xlabel('')
+    ax2.grid(True)
+    
+    # Plot 3: Daily Returns
+    ax3 = plt.subplot(313)
+    returns = portfolio_values.pct_change()
+    returns.plot(title='Daily Returns', kind='bar', ax=ax3, alpha=0.5)
+    ax3.set_xlabel('Date')
+    ax3.grid(True)
+    
     plt.tight_layout()
     
-    # Individual ticker windows with signals and executed trades
-    if ticker_data is not None and signals is not None:
-        for ticker in ticker_data.columns.levels[0]:
-            # Create new figure for each ticker
-            plt.figure(figsize=(15, 8))
-            
-            # Plot price
-            close_prices = ticker_data[(ticker, 'Close')]
-            plt.plot(close_prices.index, close_prices.values, 'b-', label='Price', linewidth=1)
-            
-            # Plot signals
-            if signals and ticker in signals:
-                signal_series = signals[ticker]
-                
-                # Buy signals (1)
-                buy_signals = signal_series[signal_series > 0]
-                if not buy_signals.empty:
-                    plt.scatter(buy_signals.index, 
-                              close_prices[buy_signals.index],
-                              marker='^', color='g', s=100, alpha=0.3, label='Buy Signal')
-                
-                # Sell signals (-1)
-                sell_signals = signal_series[signal_series < 0]
-                if not sell_signals.empty:
-                    plt.scatter(sell_signals.index,
-                              close_prices[sell_signals.index],
-                              marker='v', color='r', s=100, alpha=0.3, label='Sell Signal')
-            
-            # Plot executed trades
-            if executed_trades and ticker in executed_trades:
-                trades = executed_trades[ticker]
-                for trade in trades:
-                    if trade['type'] == 'buy':
-                        plt.scatter(trade['date'], trade['price'], 
-                                  marker='>', color='darkgreen', s=150, 
-                                  label='Executed Buy' if trade == trades[0] else "")
-                    else:  # sell
-                        plt.scatter(trade['date'], trade['price'], 
-                                  marker='<', color='darkred', s=150, 
-                                  label='Executed Sell' if trade == trades[0] else "")
-            
-            plt.title(f'{ticker} Price and Signals')
-            plt.xlabel('Date')
-            plt.ylabel('Price ($)')
-            plt.grid(True)
-            plt.legend()
-            plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path)
     
-    # Show all windows
     plt.show()

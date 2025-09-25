@@ -4,3 +4,4 @@ yfinance
 PyPortfolioOpt
 quantlib
 optopsy
+QuantStats

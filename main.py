@@ -1,43 +1,115 @@
-from data.data_acquisition import DataAcquisition
-from strategies.ta_strategy import TALibStrategy
-from strategies.multi_asset_strategy import MultiAssetStrategy
-from backtest.backtest_engine import BacktestEngine
-from portfolio.risk_management import RiskManager
-
-from utils.logger import get_logger
-from utils.performance import analyze_performance, plot_equity_curve
-import pandas as pd
 import backtrader as bt
-
-
-
-logger = get_logger(__name__)
+from data.data_acquisition import DataAcquisition
+from portfolio.portfolio_manager import PortfolioManager
+from utils.app_config import AppConfig
+from utils.performance import analyze_performance, plot_equity_curve
+from strategies.standard_strategy import StandardStrategy
+import pandas as pd
+import quantstats as qs
+import yfinance as yf
 
 def main():
-    # Multi-asset example
-    from utils.app_config import AppConfig
-    # Load all configuration at the start
-    config = AppConfig.load_from_yaml()
+    # Load configuration
+    config = AppConfig()
+    
+    # Initialize data acquisition
     tickers = config.tickers
     start_date = config.start_date
     end_date = config.end_date
-    initial_cash = config.initial_cash
-    risk_free_rate = config.risk_free_rate
-    data = DataAcquisition.get_stock_data(tickers, start_date, end_date)
-    logger.info(f'Downloaded data for {tickers}')
-    print('DEBUG: data.columns:', data.columns)
-    # Use SMA window from config if present, else default to 5
-    sma_window = getattr(config, 'sma_window', 5)
-    if hasattr(config, 'sma_window'):
-        sma_window = config.sma_window
-    else:
-        try:
-            import yaml
-            with open('config.yaml', 'r') as f:
-                ydata = yaml.safe_load(f)
-            sma_window = ydata.get('sma_window', 5)
-        except Exception:
-            sma_window = 5
+    
+    # Get data feeds
+    data_feeds = DataAcquisition.get_stock_data(tickers, start_date, end_date)
+    
+    # Initialize Backtrader cerebro
+    cerebro = bt.Cerebro()
+    
+    # Add data feeds to cerebro
+    for ticker, data in data_feeds.items():
+        cerebro.adddata(data, name=ticker)
+    
+    # Add our standard strategy
+    cerebro.addstrategy(StandardStrategy,
+                       sma_window=config.strategy.sma_window,
+                       sma_long_window=config.strategy.sma_long_window,
+                       rsi_window=config.strategy.rsi_window,
+                       rsi_oversold=config.strategy.rsi_oversold,
+                       rsi_overbought=config.strategy.rsi_overbought,
+                       risk_per_trade=config.strategy.risk_per_trade,
+                       max_position_size=config.strategy.max_position_size)
+    
+    # Set broker parameters
+    cerebro.broker.setcash(config.initial_cash)
+    cerebro.broker.setcommission(commission=config.commission)  # 0.1% commission
+    
+    # Add analyzers
+    cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')
+    cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
+    cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
+    
+    # Print initial portfolio value
+    print(f'Initial portfolio value: ${cerebro.broker.getvalue():,.2f}')
+    
+    # Run backtest
+    results = cerebro.run()
+    strat = results[0]
+    
+    # Print final portfolio value
+    print(f'Final portfolio value: ${cerebro.broker.getvalue():,.2f}')
+    
+    # Analyze performance
+    metrics, drawdown = analyze_performance(cerebro, data_feeds)
+    
+    # Print performance metrics
+    print("\nPerformance Metrics:")
+    for metric, value in metrics.items():
+        print(f"{metric}: {value:.2%}" if isinstance(value, float) else f"{metric}: {value}")
+    
+    # Plot results
+    plot_equity_curve(cerebro)
+    
+    # Generate detailed HTML report with QuantStats
+    portfolio_returns = pd.Series(strat._value_history).pct_change().dropna()
+    benchmark_data = yf.download('^GSPC', start=start_date, end=end_date)['Close'].pct_change().dropna()
+    qs.reports.html(portfolio_returns, benchmark_data, output='trading_report.html')
+    # Load configuration
+    config = AppConfig.load_from_yaml()
+    
+    # Download data
+    data = DataAcquisition.get_stock_data(
+        config.tickers,
+        config.start_date,
+        config.end_date
+    )
+    
+    # Initialize portfolio manager
+    portfolio_manager = PortfolioManager(config)
+    
+    # Prepare data dictionary for each ticker
+    ticker_data = {}
+    for ticker in config.tickers:
+        if isinstance(data.columns, pd.MultiIndex):
+            ticker_cols = [col for col in data.columns if col[0] == ticker]
+            if ticker_cols:
+                df = data[ticker_cols].copy()
+                df.columns = [col[1] for col in ticker_cols]
+                ticker_data[ticker] = df
+        else:
+            ticker_data[ticker] = data
+    
+    # Run portfolio manager
+    portfolio_values = portfolio_manager.run(ticker_data)
+    
+    # Analyze and plot results
+    performance_metrics = analyze_performance(portfolio_values, config.risk_free_rate)
+    plot_equity_curve(portfolio_values)
+    
+    # Print performance metrics
+    print("\nPerformance Metrics:")
+    for metric, value in performance_metrics.items():
+        print(f"{metric}: {value}")
+
+if __name__ == "__main__":
+    main()
     # Generate signals for each asset
     signals = {}
     explanations = {}
