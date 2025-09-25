@@ -54,7 +54,7 @@ def main():
         else:
             asset_data = data
         strategy = TALibStrategy()
-        sig = strategy.generate_signals(asset_data, sma_window=sma_window)
+        sig = strategy.generate_signals(asset_data, config=config)
         # Align signal index to asset_data index for Backtrader compatibility
         sig = sig.reindex(asset_data.index)
         signals[ticker] = sig

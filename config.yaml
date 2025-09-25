@@ -3,11 +3,32 @@
 
 tickers:
   - AAPL
-  #- TSLA
-  #- NVDA
+  - TSLA
+  - NVDA
 start_date: '2020-01-01'
 end_date: '2023-01-01'
 initial_cash: 100000
 risk_free_rate: 0.0
-# Add strategy params
-sma_window: 5
+
+# Strategy Parameters
+strategy:
+  # Moving Average Parameters
+  sma_window: 50          # Medium-term SMA window (50-day standard)
+  sma_long_window: 200    # Long-term SMA window (200-day standard for major trends)
+  
+  # Risk Management Parameters
+  risk_per_trade: 0.02    # Maximum risk per trade (2% of portfolio)
+  max_position_size: 0.2  # Maximum size of any single position (20% of portfolio)
+  max_drawdown: 0.10     # Maximum drawdown allowed per trade (10%)
+  stop_loss_atr_multiplier: 2.0  # ATR multiplier for stop loss calculation
+  
+  # Technical Indicators
+  rsi_window: 14         # RSI lookback period
+  rsi_oversold: 30       # RSI oversold level for buy signals
+  rsi_overbought: 70     # RSI overbought level for sell signals
+  
+  # Position Sizing and Volatility
+  atr_window: 14         # ATR period for volatility-based position sizing
+  atr_risk_factor: 2     # Multiple of ATR to use for risk calculation
+  trailing_stop: false    # Enable/disable trailing stop losses
+  trailing_stop_atr: 3   # ATR multiplier for trailing stop (if enabled)

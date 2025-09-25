@@ -3,23 +3,59 @@ import pandas as pd
 from .base_strategy import BaseStrategy
 
 class TALibStrategy(BaseStrategy):
-    def generate_signals(self, data, sma_window=5):
+    def generate_signals(self, data, config=None):
         import pandas as pd
-        print('DEBUG: data.columns:', data.columns)
+        
+        # Get parameters from config
+        sma_window = config.strategy.sma_window
+        sma_long_window = config.strategy.sma_long_window
+        rsi_window = config.strategy.rsi_window
+        rsi_oversold = config.strategy.rsi_oversold
+        rsi_overbought = config.strategy.rsi_overbought
+        
         # Handle MultiIndex columns from yfinance
         if isinstance(data.columns, pd.MultiIndex):
-            close_col = [col for col in data.columns if col[0] == 'Close'][0]
-            close = data[close_col]
+            close = data[('Close',)] if ('Close',) in data.columns else data[(data.columns[0][0], 'Close')]
+            high = data[('High',)] if ('High',) in data.columns else data[(data.columns[0][0], 'High')]
+            low = data[('Low',)] if ('Low',) in data.columns else data[(data.columns[0][0], 'Low')]
         else:
             close = data['Close']
-        print('DEBUG: type(close):', type(close))
-        close_flat = close.to_numpy().flatten()
-        print('DEBUG after flatten: close_flat type:', type(close_flat), 'shape:', close_flat.shape)
-        sma = talib.SMA(close_flat, timeperiod=sma_window)
-        close_series = pd.Series(close_flat, index=close.index)
+            high = data['High']
+            low = data['Low']
+            
+        # Calculate indicators
+        close_np = close.to_numpy()
+        sma = talib.SMA(close_np, timeperiod=sma_window)
+        sma_long = talib.SMA(close_np, timeperiod=sma_long_window)
+        rsi = talib.RSI(close_np, timeperiod=rsi_window)
+        
+        # Convert to series for easier comparison
+        close_series = pd.Series(close_np, index=close.index)
         sma_series = pd.Series(sma, index=close.index)
-        # Generate signals: 1 for buy, -1 for sell, 0 for hold
-        signals = (close_series > sma_series).astype(int) - (close_series < sma_series).astype(int)
+        sma_long_series = pd.Series(sma_long, index=close.index)
+        rsi_series = pd.Series(rsi, index=close.index)
+        
+        # Initialize signals
+        signals = pd.Series(0, index=close.index)
+        
+        # Buy conditions: Price > SMAs and RSI > oversold
+        buy_condition = (
+            (close_series > sma_series) & 
+            (sma_series > sma_long_series) & 
+            (rsi_series > rsi_oversold)
+        )
+        
+        # Sell conditions: Price < SMAs or RSI > overbought
+        sell_condition = (
+            (close_series < sma_series) | 
+            (sma_series < sma_long_series) | 
+            (rsi_series > rsi_overbought)
+        )
+        
+        # Set signals
+        signals[buy_condition] = 1
+        signals[sell_condition] = -1
+        
         return signals
 
     def explain_signals(self, data, signals):
