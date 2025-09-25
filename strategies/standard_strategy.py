@@ -64,20 +64,27 @@ class StandardStrategy(bt.Strategy):
         
         if not self.position:  # No position - look for entry signals
             # Buy conditions
+            # Log signal data for debugging
+            self.log_signal_data()
+            
             buy_signal = (
                 self.data.close > self.sma and  # Price above short MA
-                self.sma > self.sma_long and    # Golden cross
-                self.rsi < self.p.rsi_oversold and  # Oversold
-                self.volume_sma_ratio > self.p.volume_factor  # Volume confirmation
+                self.data.close > self.sma_long and  # Price above long MA
+                self.volume_sma_ratio > 1.0  # Above average volume
             )
+            
+            if buy_signal:
+                self.log(f"BUY SIGNAL Generated - Close: {self.data.close[0]:.2f}, RSI: {self.rsi[0]:.2f}")
             
             # Sell conditions
             sell_signal = (
                 self.data.close < self.sma and  # Price below short MA
-                self.sma < self.sma_long and    # Death cross
-                self.rsi > self.p.rsi_overbought and  # Overbought
-                self.volume_sma_ratio > self.p.volume_factor  # Volume confirmation
+                self.data.close < self.sma_long and  # Price below long MA
+                self.volume_sma_ratio > 1.0  # Above average volume
             )
+            
+            if sell_signal:
+                self.log(f"SELL SIGNAL Generated - Close: {self.data.close[0]:.2f}, RSI: {self.rsi[0]:.2f}")
             
             if buy_signal:
                 self.buy_signal()
@@ -147,18 +154,35 @@ class StandardStrategy(bt.Strategy):
     def notify_order(self, order):
         """Handle order notifications"""
         if order.status in [order.Submitted, order.Accepted]:
+            # Order has been submitted/accepted - show basic info
+            self.log(f'ORDER SUBMITTED/ACCEPTED - Type: {"BUY" if order.isbuy() else "SELL"}, Size: {order.size}')
             return
             
         if order.status in [order.Completed]:
             if order.isbuy():
-                self.log(f'BUY EXECUTED, Price: {order.executed.price:.2f}, Cost: {order.executed.value:.2f}, Comm: {order.executed.comm:.2f}')
+                self.log(f'BUY EXECUTED - Price: {order.executed.price:.2f}, Size: {order.executed.size}, '
+                        f'Cost: {order.executed.value:.2f}, Comm: {order.executed.comm:.2f}')
+                self.log(f'Portfolio Value: ${self.broker.getvalue():.2f}, Cash: ${self.broker.get_cash():.2f}')
             else:
-                self.log(f'SELL EXECUTED, Price: {order.executed.price:.2f}, Cost: {order.executed.value:.2f}, Comm: {order.executed.comm:.2f}')
+                self.log(f'SELL EXECUTED - Price: {order.executed.price:.2f}, Size: {order.executed.size}, '
+                        f'Cost: {order.executed.value:.2f}, Comm: {order.executed.comm:.2f}')
+                self.log(f'Portfolio Value: ${self.broker.getvalue():.2f}, Cash: ${self.broker.get_cash():.2f}')
                 
-        elif order.status in [order.Canceled, order.Margin, order.Rejected]:
-            self.log('Order Canceled/Margin/Rejected')
+        elif order.status in [order.Canceled]:
+            self.log('Order Canceled')
+        elif order.status in [order.Margin]:
+            self.log('Order Margin - Not enough funds')
+        elif order.status in [order.Rejected]:
+            self.log('Order Rejected - Check size and margin requirements')
             
+        # Reset the order reference
         self.order = None
+        
+        # Print current position info
+        for data in self.datas:
+            pos = self.getposition(data)
+            if pos.size != 0:
+                self.log(f'Current Position [{data._name}]: {pos.size} shares at {pos.price:.2f}')
 
     def notify_trade(self, trade):
         """Handle trade notifications"""
@@ -182,6 +206,17 @@ class StandardStrategy(bt.Strategy):
         """Logging function"""
         dt = self.datas[0].datetime.date(0)
         print(f'{dt.isoformat()}, {txt}')
+        
+    def log_signal_data(self):
+        """Log current indicator values for debugging"""
+        for i, d in enumerate(self.datas):
+            self.log(f'===== {d._name} Signal Analysis =====')
+            self.log(f'Close: {d.close[0]:.2f}')
+            self.log(f'SMA: {self.sma[0]:.2f}')
+            self.log(f'SMA Long: {self.sma_long[0]:.2f}')
+            self.log(f'RSI: {self.rsi[0]:.2f}')
+            self.log(f'Volume Ratio: {self.volume_sma_ratio[0]:.2f}')
+            self.log(f'ATR: {self.atr[0]:.2f}')
 
     def get_analysis(self):
         """Return strategy analysis"""

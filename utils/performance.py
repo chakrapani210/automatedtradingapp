@@ -63,6 +63,11 @@ def plot_equity_curve(cerebro: bt.Cerebro, save_path: Optional[str] = None) -> N
         cerebro: The backtrader cerebro instance after running
         save_path: Optional path to save the plot
     """
+    try:
+        cerebro.plot(style='candlestick', volume=True)
+    except Exception as e:
+        print(f"Warning: Could not create detailed plot: {e}")
+        print("Falling back to basic plotting...")
     # Get the strategy instance
     strat = cerebro.runstrats[0][0]
     

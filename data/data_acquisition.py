@@ -9,6 +9,7 @@ class DataAcquisition:
         if isinstance(tickers, str):
             tickers = [tickers]
             
+        print("\nFetching data for tickers:", tickers)
         data_feeds = {}
         for ticker in tickers:
             # Download data using yfinance
@@ -30,6 +31,10 @@ class DataAcquisition:
                 ticker_data.columns = ticker_data.columns.str.lower()
                 if 'openinterest' not in ticker_data.columns:
                     ticker_data['openinterest'] = 0
+            
+            print(f"\nData shape for {ticker}: {ticker_data.shape}")
+            print(f"First few rows of {ticker} data:")
+            print(ticker_data.head())
             
             # Convert to backtrader format
             data_feeds[ticker] = bt.feeds.PandasData(

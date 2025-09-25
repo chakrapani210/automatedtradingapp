@@ -50,19 +50,19 @@ class VolumeConfig:
 @dataclass
 class StrategyConfig:
     # Moving Average Parameters
-    sma_window: int = 50          # Medium-term SMA window
-    sma_long_window: int = 200    # Long-term SMA window
+    sma_window: int = 20          # Shorter-term SMA window for more signals
+    sma_long_window: int = 50     # Medium-term SMA window
     
     # Risk Management Parameters
     risk_per_trade: float = 0.02   # Maximum risk per trade (2% of portfolio)
-    max_position_size: float = 0.2  # Maximum position size (20% of portfolio)
-    max_drawdown: float = 0.10     # Maximum drawdown allowed per trade
-    stop_loss_atr_multiplier: float = 2.0  # ATR multiplier for stop loss
+    max_position_size: float = 0.25  # Maximum position size (25% of portfolio)
+    max_drawdown: float = 0.15     # Maximum drawdown allowed per trade
+    stop_loss_atr_multiplier: float = 2.5  # ATR multiplier for stop loss
     
     # Technical Indicators
     rsi_window: int = 14          # RSI lookback period
-    rsi_oversold: int = 30        # RSI oversold level
-    rsi_overbought: int = 70      # RSI overbought level
+    rsi_oversold: int = 40        # RSI oversold level (less strict)
+    rsi_overbought: int = 60      # RSI overbought level (less strict)
     
     # Position Sizing and Volatility
     atr_window: int = 14          # ATR period for volatility-based sizing
@@ -106,8 +106,8 @@ class StrategyConfig:
 class AppConfig:
     # Basic Settings
     tickers: List[str] = field(default_factory=lambda: ['AAPL'])
-    start_date: str = '2022-01-01'
-    end_date: str = '2023-01-01'
+    start_date: str = '2023-01-01'
+    end_date: str = '2023-12-31'
     initial_cash: float = 100000
     risk_free_rate: float = 0.0
     commission: float = 0.001  # 0.1% commission
