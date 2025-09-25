@@ -54,16 +54,19 @@ def main():
         else:
             asset_data = data
         strategy = TALibStrategy()
-        # After generating sig for each ticker
         sig = strategy.generate_signals(asset_data, sma_window=sma_window)
-        sig = sig.reindex(asset_data.index)  # Align signal index to data index
+        # Align signal index to asset_data index for Backtrader compatibility
+        sig = sig.reindex(asset_data.index)
         signals[ticker] = sig
+        # Debug: Print first few signal values
+        print(f"DEBUG: First 5 signals for {ticker}:")
+        print(sig.head())
         # Generate explanations for signals
         if hasattr(strategy, 'explain_signals'):
             asset_data['SMA'] = asset_data['Close'].rolling(sma_window).mean()
             explanations[ticker] = strategy.explain_signals(asset_data, sig)
             #for exp in explanations[ticker]:
-                #logger.info(f"{ticker} {exp['date']}: Signal={exp['signal']}, Close={exp['close']:.2f}, SMA={exp['sma']:.2f}, Reason={exp['reason']}")
+            #    logger.info(f"{ticker} {exp['date']}: Signal={exp['signal']}, Close={exp['close']:.2f}, SMA={exp['sma']:.2f}, Reason={exp['reason']}")
     logger.info('Generated trading signals for all assets')
 
     # Prepare price data for risk manager (Close prices for all assets)
@@ -81,6 +84,10 @@ def main():
     risk_manager = RiskManager(close_prices, risk_free_rate=risk_free_rate)
     weights = risk_manager.optimize_portfolio()
     logger.info(f'Optimized portfolio weights: {weights}')
+    
+    # Debug: Check if weights sum to ~1.0
+    weight_sum = sum(weights.values())
+    print(f"DEBUG: Sum of portfolio weights: {weight_sum}")
 
 
 
@@ -120,7 +127,8 @@ def main():
         portfolio_values = pd.Series(strat.broker._value_history, index=bt_df.index[:len(strat.broker._value_history)])
         metrics, drawdown = analyze_performance(portfolio_values)
         logger.info(f'Performance metrics: {metrics}')
-        #plot_equity_curve(portfolio_values, drawdown)
+        # Plot portfolio, ticker performances, signals and executed trades
+        plot_equity_curve(portfolio_values, drawdown, data, signals, strat.executed_trades)
 
     else:
         logger.warning('Portfolio value history not available for analysis.')

@@ -1,6 +1,6 @@
 
 import backtrader as bt
-
+import pandas as pd
 
 
 class MultiAssetStrategy(bt.Strategy):
@@ -14,16 +14,20 @@ class MultiAssetStrategy(bt.Strategy):
         self.datas_by_ticker = {d._name: d for d in self.datas}
         self.order_refs = {ticker: None for ticker in self.tickers}
         self.current_date = None
+        # Track executed trades
+        self.executed_trades = {ticker: [] for ticker in self.tickers}  # Store executed orders for each ticker
     # No custom account manager needed
         # Initialize portfolio value history
         if not hasattr(self.broker, '_value_history'):
             self.broker._value_history = []
 
     def next(self):
-        print(f"DEBUG: next() called for date {self.datas[0].datetime.date(0)}")
-        dt = self.datas[0].datetime.date(0)
+        dt = pd.Timestamp(self.datas[0].datetime.date(0))  # Convert to pandas Timestamp
+        current_value = self.broker.getvalue()
+        print(f"\nDEBUG: ===== next() called for date {dt} =====")
+        print(f"Current portfolio value: ${current_value:.2f}")
         # Record portfolio value at each step
-        self.broker._value_history.append(self.broker.getvalue())
+        self.broker._value_history.append(current_value)
         if self.current_date == dt:
             return
         self.current_date = dt
@@ -32,17 +36,28 @@ class MultiAssetStrategy(bt.Strategy):
             signal = self.params.signals[ticker]
             weight = self.params.weights.get(ticker, 0)
             print(f"DEBUG: Ticker={ticker}, Weight={weight}, Signal index sample={signal.index[:5]}")
-            # Get signal for current date
-            if dt not in signal.index:
-                print(f"DEBUG: {ticker} - date {dt} not in signal index")
+            # Get signal for current date, safely handle missing dates
+            try:
+                sig = signal.loc[dt]
+                if pd.isna(sig):
+                    print(f"DEBUG: {ticker} - Skipping date {dt} (signal is NaN)")
+                    continue
+                print(f"DEBUG: {ticker} - Signal value for {dt}: {sig}")
+                pos = self.getposition(data).size
+                target_value = self.broker.getvalue() * weight
+                price = data.close[0]
+                cash = self.broker.get_cash()
+            except KeyError as e:
+                print(f"DEBUG: {ticker} - Error getting signal for date {dt}: {e}")
                 continue
-            sig = signal.loc[dt]
-            print(f"DEBUG: {ticker} - Signal value for {dt}: {sig}")
-            pos = self.getposition(data).size
-            target_value = self.broker.getvalue() * weight
-            price = data.close[0]
-            # Detailed trade logging
-            print(f"[{dt}] {ticker}: Signal={sig}, Position={pos}, TargetValue={target_value:.2f}, Price={price:.2f}")
+            # Detailed trade analysis
+            print(f"\nDEBUG: Analysis for {ticker} on {dt}:")
+            print(f"  - Current position: {pos} shares")
+            print(f"  - Portfolio weight: {weight:.4f}")
+            print(f"  - Target value: ${target_value:.2f}")
+            print(f"  - Available cash: ${cash:.2f}")
+            print(f"  - Current price: ${price:.2f}")
+            print(f"  - Signal value: {sig}")
             # Debug: print all relevant variables
             if sig > 0 and pos == 0:
                 size = int(target_value // price)
@@ -76,5 +91,13 @@ class MultiAssetStrategy(bt.Strategy):
         if order.status in [order.Completed]:
             qty = order.executed.size
             price = order.executed.price
+            dt = self.datas[0].datetime.date(0)  # Current date
             signed_qty = qty if order.isbuy() else -qty
+            # Store executed trade info
+            self.executed_trades[symbol].append({
+                'date': dt,
+                'price': price,
+                'qty': signed_qty,
+                'type': 'buy' if order.isbuy() else 'sell'
+            })
             print(f"Order completed: {symbol} {signed_qty} @ {price:.2f}")
