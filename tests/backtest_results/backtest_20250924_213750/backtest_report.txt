@@ -1,0 +1,20 @@
+=== Volume Strategy Backtest Report ===
+
+Test Date: 2025-09-24 21:37:50
+Period: 2023-09-25 to 2025-09-24
+
+
+AAPL Results:
+-------------
+
+✗ Error in AAPL backtest: The truth value of a Series is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().
+
+MSFT Results:
+-------------
+
+✗ Error in MSFT backtest: The truth value of a Series is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().
+
+GOOGL Results:
+--------------
+
+✗ Error in GOOGL backtest: The truth value of a Series is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().
