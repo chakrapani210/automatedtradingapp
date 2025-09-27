@@ -5,3 +5,7 @@ PyPortfolioOpt
 quantlib
 optopsy
 QuantStats
+matplotlib
+pyarrow
+plotly
+numpy

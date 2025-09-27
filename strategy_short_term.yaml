@@ -1,0 +1,64 @@
+short_term:
+  enabled: true
+  sma_window: 20
+  sma_long_window: 50
+  rsi_window: 14
+  rsi_oversold: 40
+  rsi_overbought: 60
+  bb_period: 20
+  bb_devfactor: 2.0
+  volume_factor: 1.2
+  volume_ma_window: 20
+  risk_per_trade: 0.02
+  max_position_size: 0.10
+  max_position_fraction: 0.10
+  use_fraction_cap: true
+  atr_period: 14
+  atr_stop_multiplier: 2.0
+  trailing_stop: true
+  trailing_stop_atr: 2.5
+  buy_score_threshold: 0.12   # lowered to increase entry sensitivity
+  sell_score_threshold: 0.10   # lowered to allow earlier exit / flip
+  hysteresis_buffer: 0.04      # slightly narrower band
+  enable_weighted_signals: true
+  adaptive_thresholds: true
+  adaptive_lookback: 120
+  adaptive_buy_pct: 52.0       # lower percentile to trigger more frequently
+  adaptive_sell_pct: 52.0
+  adaptive_min_obs: 30         # fewer observations needed for intraday adaptation
+  debug_last_bar_components: true
+  enable_fallback: false
+  min_hold_bars: 3
+  cooldown_bars_after_exit: 2
+  neutral_band: 0.015          # shrink neutral dead-zone
+  min_bull_components: 1
+  entry_confirm_bars: 1
+  exit_confirm_bars: 1
+  enable_zscore_filter: false
+  zscore_lookback: 50
+  zscore_entry: 0.75
+  zscore_exit: -0.25
+  # --- New VWAP & Stochastic parameters ---
+  vwap_scale: 28.0           # further reduce so small deviations register
+  stoch_oversold: 20.0
+  stoch_overbought: 80.0
+  export_component_arrays: true
+  component_export_path: short_term_components.csv
+  weights_bull:
+    rsi_mean_reversion: 0.15
+    boll_lower: 0.17
+    short_above_long: 0.13
+  momentum_slope: 0.16      # emphasize emerging slope
+  vwap_trend: 0.14          # slightly higher weight to vwap diff
+  stoch_osc: 0.08
+  mfi_flow: 0.06
+  price_momentum: 0.14
+  weights_bear:
+    rsi_mean_reversion: 0.15
+    boll_upper: 0.17
+    short_below_long: 0.13
+  momentum_slope: 0.16
+  vwap_trend: 0.15
+  stoch_osc: 0.08
+  mfi_flow: 0.06
+  price_momentum: 0.13

@@ -1,0 +1,2 @@
+num_trades,win_rate,avg_return_pct,median_return_pct,avg_holding_days,avg_winner_pct,avg_loser_pct,expectancy_pct
+2,0.5,0.06452107850894417,0.06452107850894417,73.0,0.19861952148286832,-0.06957736446497997,0.06452107850894417

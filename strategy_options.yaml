@@ -1,0 +1,26 @@
+options:
+  enabled: false
+  strategy_type: iron_condor
+  days_to_expiry_min: 30
+  days_to_expiry_max: 45
+  delta_short: 0.16
+  delta_long: 0.08
+  theta_min: 0.1
+  vega_max: 0.5
+  profit_target_pct: 0.50
+  stop_loss_pct: 0.75
+  max_loss_per_trade: 0.01
+  max_position_size: 0.05
+  portfolio_margin_limit: 0.15
+  max_contracts_per_trade: 10
+  iv_rank_min: 0.3
+  iv_rank_max: 0.8
+  iv_percentile_threshold: 50
+  risk_per_trade: 0.01
+  scale_with_vol: true
+  vol_low_threshold: 0.15
+  vol_high_threshold: 0.30
+  vol_floor_fraction: 0.30
+  vol_ema_period: 10
+  max_position_fraction: 0.05
+  min_position_shares: 1

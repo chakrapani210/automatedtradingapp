@@ -1,0 +1,2 @@
+date,signal,event_type,close,sma,sma_long,rsi,ema,ema_long,mom,roc,adx,composite_score,bull_components,total_components,atr,trail_stop,peak_composite,confidence,peak_confidence,effective_risk_fraction,realized_vol
+2024-09-03,-1,SELL,221.738037109375,,,,,,,,,0.0,0,5,,,0.0,0.0,0.0,,

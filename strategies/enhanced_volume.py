@@ -53,7 +53,8 @@ class EnhancedVolumeAnalysis:
         fi = (data['Close'] - data['Close'].shift(1)) * data['Volume']
         fi = fi.fillna(0)  # Fill NaN values with 0 for the first period
         fi_ema = talib.EMA(fi.values.astype(float), timeperiod=period)
-        return pd.Series(fi_ema, index=data.index).fillna(method='bfill')
+        # Use bfill() instead of deprecated fillna(method='bfill')
+        return pd.Series(fi_ema, index=data.index).bfill()
 
     @staticmethod
     def calculate_volume_intensity(data: pd.DataFrame, window: int = 20) -> pd.Series:
@@ -141,7 +142,8 @@ class EnhancedVolumeAnalysis:
         
         # Assign each price to a bin
         price_bins = pd.cut(recent_data['Close'], bins=bins, labels=labels)
-        volume_profile = recent_data.groupby(price_bins)['Volume'].sum()
+        # Explicit observed=False to silence future pandas default change warning
+        volume_profile = recent_data.groupby(price_bins, observed=False)['Volume'].sum()
         
         # Find high volume areas
         mean_volume = volume_profile.mean()

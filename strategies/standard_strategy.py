@@ -7,37 +7,40 @@ class StandardStrategy(bt.Strategy):
     """A strategy that uses standard libraries and best practices for signal generation"""
     
     params = (
-        ('sma_window', 50),
-        ('sma_long_window', 200),
-        ('rsi_window', 14),
-        ('rsi_oversold', 30),
-        ('rsi_overbought', 70),
-        ('bb_period', 20),
-        ('bb_devfactor', 2.0),
-        ('volume_factor', 1.2),
-        ('atr_period', 14),
-        ('risk_per_trade', 0.02),
-        ('max_position_size', 0.2),
+        ('config', None),  # Will be set from AppConfig
     )
 
     def __init__(self):
         """Initialize indicators using backtrader's built-in functionality"""
         # Initialize value history list
         self._value_history = []
+        
+        # Get strategy configuration based on allocation type
+        if self.p.config is None:
+            raise ValueError("Strategy configuration not provided")
+            
+        strat_config = self.p.config.short_term_strategy  # Using short-term strategy config by default
+        
         # Price indicators
-        self.sma = bt.indicators.SMA(period=self.p.sma_window)
-        self.sma_long = bt.indicators.SMA(period=self.p.sma_long_window)
+        self.sma = bt.indicators.SMA(period=strat_config.sma_window)
+        self.sma_long = bt.indicators.SMA(period=strat_config.sma_long_window)
         
         # Momentum indicators
-        self.rsi = bt.indicators.RSI(period=self.p.rsi_window)
+        self.rsi = bt.indicators.RSI(period=strat_config.rsi_window)
         
         # Volatility indicators
-        self.bb = bt.indicators.BollingerBands(period=self.p.bb_period, devfactor=self.p.bb_devfactor)
-        self.atr = bt.indicators.ATR(period=self.p.atr_period)
+        self.bb = bt.indicators.BollingerBands(
+            period=strat_config.bb_period,
+            devfactor=strat_config.bb_devfactor
+        )
+        self.atr = bt.indicators.ATR(period=strat_config.atr_period)
         
         # Volume indicators
-        self.volume_ma = bt.indicators.SMA(self.data.volume, period=self.p.sma_window)
-        self.volume_sma_ratio = self.data.volume / self.volume_ma  # Volume ratio for trend strength
+        self.volume_ma = bt.indicators.SMA(
+            self.data.volume,
+            period=strat_config.volume_ma_window
+        )
+        self.volume_sma_ratio = self.data.volume / self.volume_ma
         
         # Track order and position management
         self.order = None
@@ -93,14 +96,15 @@ class StandardStrategy(bt.Strategy):
                 
         else:  # Have position - look for exit signals
             if self.position.size > 0:  # Long position
+                strat_config = self.p.config.short_term_strategy
                 if (self.data.close < self.sma or 
-                    self.rsi > self.p.rsi_overbought or 
+                    self.rsi > strat_config.rsi_overbought or 
                     self.data.close < self.stop_loss):
                     self.close()
                     
             else:  # Short position
                 if (self.data.close > self.sma or 
-                    self.rsi < self.p.rsi_oversold or 
+                    self.rsi < strat_config.rsi_oversold or 
                     self.data.close > self.stop_loss):
                     self.close()
 
@@ -136,17 +140,18 @@ class StandardStrategy(bt.Strategy):
 
     def position_size(self):
         """Calculate position size based on ATR and account risk"""
+        strat_config = self.p.config.short_term_strategy
         price = self.data.close[0]
         atr = self.atr[0]
         
         # Risk amount based on account equity
-        risk_amount = self.broker.getvalue() * self.p.risk_per_trade
+        risk_amount = self.broker.getvalue() * strat_config.risk_per_trade
         
         # Position size based on ATR stop loss
-        size = risk_amount / (atr * 2)  # 2 ATR stop loss
+        size = risk_amount / (atr * strat_config.atr_stop_multiplier)
         
         # Limit position size
-        max_size = self.broker.getvalue() * self.p.max_position_size / price
+        max_size = self.broker.getvalue() * strat_config.max_position_size / price
         size = min(size, max_size)
         
         return int(size)

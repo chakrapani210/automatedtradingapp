@@ -1,0 +1,81 @@
+talib:
+  # Medium-term tuned configuration (swing / intermediate trend)
+  enabled: true
+  sma_window: 50         # was 20
+  sma_long_window: 100   # was 50
+  rsi_window: 14
+  rsi_oversold: 40
+  rsi_overbought: 60
+  risk_per_trade: 0.01
+  max_position_size: 0.10
+  max_position_fraction: 0.20
+  atr_period: 14
+  atr_stop_multiplier: 2.0
+  trailing_stop: true
+  enable_neutral: true
+  bull_confirm_bars: 3        # slower confirmation for medium-term entries
+  trail_atr_multiplier: 2.5
+  enable_trailing_atr: true
+  enable_composite: true
+  ema_window: 34         # was 21
+  ema_long_window: 89    # was 55
+  momentum_window: 20    # was 10
+  roc_window: 20         # was 10
+  adx_window: 20         # was 14
+  buy_score_threshold: 0.60   # slightly higher for slower regime
+  sell_score_threshold: 0.40
+  min_components: 3           # broader confirmation
+  enable_trend_component: true
+  enable_ema_component: true
+  enable_mom_component: true
+  enable_roc_component: true
+  enable_adx_component: true
+  # Position sizing & scaling
+  position_size_scale_with_score: true
+  score_min_risk_at: 0.40
+  score_full_risk_at: 0.80
+  position_score_floor_fraction: 0.30  # maintain higher base allocation
+  max_atr_pct: 0.05
+  min_position_shares: 1
+  # Reliability & calibration
+  enable_dynamic_calibration: true
+  warmup_bars_for_reliability: 60   # longer warmup for medium-term
+  reliability_smoothing: 0.12       # slower adaptation
+  reliability_floor: 0.30
+  reliability_regression_to_mean: 0.02
+  instability_lookback: 15
+  instability_penalty: 0.35
+  micro_move_threshold: 0.002
+  calibration_update_interval: 5   # recalibrate reliability every 5 bars
+  # Confidence blending
+  use_confidence_for_sizing: true
+  confidence_blend_weight: 0.50
+  min_confidence: 0.30
+  full_confidence: 0.80
+  confidence_floor_fraction: 0.30
+  high_priority_size_boost: 0.10
+  # High priority override (example left commented)
+  # Valid high_priority_components values (case-sensitive):
+  #   - trend : close > SMA > long SMA trend stack
+  #   - ema   : close > EMA > long EMA alignment
+  #   - mom   : MOM(momentum_window) > 0
+  #   - roc   : ROC(roc_window) > 0
+  #   - adx   : ADX(adx_window) >= 20 (trend strength)
+  # Any other identifiers (e.g. 'RSI', 'golden_cross') are NOT part of the TA composite and will be ignored.
+  # Remove or comment out unrecognized names to avoid confusion.
+  high_priority_components: [trend, ema]
+  # override_threshold: 0.70
+  # Partial exits
+  enable_partial_exits: true
+  partial_exit_reduction: 0.40    # lighter trim
+  partial_exit_score_drop: 0.22   # require deeper deterioration
+  enable_confidence_partial_exit: true
+  # Drawdown & volatility gating
+  enable_drawdown_dampening: true
+  drawdown_dampening_threshold: 0.10  # start later
+  drawdown_dampening_factor: 0.60     # softer dampening
+  enable_volatility_gate: true
+  vol_gate_atr_pct: 0.075
+  vol_gate_confidence_penalty: 0.08
+  # Entry gating
+  enable_rsi_overbought_entry_gate: true  # if true, block initiating bull streak while RSI >= rsi_overbought

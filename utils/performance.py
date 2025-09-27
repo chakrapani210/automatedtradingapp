@@ -6,27 +6,32 @@ from typing import Dict, Any, Tuple, Optional
 import matplotlib.pyplot as plt
 
 def analyze_performance(cerebro: bt.Cerebro, data_feeds: Dict[str, bt.feeds.PandasData]) -> Tuple[Dict[str, float], pd.Series]:
+    """Analyze trading performance after a run.
+
+    Assumes `cerebro.run()` already executed externally (to avoid double execution) and that
+    analyzers were added prior to run (main.py does this). Falls back gracefully if private
+    attributes (e.g. _value_history) are not present.
     """
-    Analyze trading performance using QuantStats and backtrader analyzers
-    """
-    # Add analyzers to cerebro
-    cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
-    cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe', riskfreerate=0.0)
-    cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
-    cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
-    
-    # Run the backtest
-    results = cerebro.run()
-    strat = results[0]
-    
-    # Get analyzer results
-    ret_analyzer = strat.analyzers.returns.get_analysis()
-    sharpe_analyzer = strat.analyzers.sharpe.get_analysis()
-    dd_analyzer = strat.analyzers.drawdown.get_analysis()
-    trade_analyzer = strat.analyzers.trades.get_analysis()
-    
-    # Calculate portfolio values and returns
-    portfolio_values = pd.Series(strat._value_history)
+    # Retrieve strategy instance from last run
+    try:
+        strat = cerebro.runstrats[0][0]
+    except Exception:
+        return {}, pd.Series(dtype=float)
+
+    # Analyzer results (guarded)
+    def safe_analyzer(name):
+        return getattr(strat.analyzers, name).get_analysis() if hasattr(strat.analyzers, name) else {}
+    ret_analyzer = safe_analyzer('returns')
+    sharpe_analyzer = safe_analyzer('sharpe')
+    dd_analyzer = safe_analyzer('drawdown')
+    trade_analyzer = safe_analyzer('trades')
+
+    # Portfolio value history: prefer strategy _value_history else reconstruct simplistic series
+    if hasattr(strat, '_value_history') and len(getattr(strat, '_value_history')) > 1:
+        portfolio_values = pd.Series(strat._value_history)
+    else:
+        # Fallback: single-point series using current broker value
+        portfolio_values = pd.Series([cerebro.broker.getvalue()])
     returns = portfolio_values.pct_change().dropna()
     
     # Calculate drawdown series
@@ -34,8 +39,12 @@ def analyze_performance(cerebro: bt.Cerebro, data_feeds: Dict[str, bt.feeds.Pand
     drawdown = (portfolio_values - running_max) / running_max
     
     # Calculate basic metrics
-    total_return = portfolio_values.iloc[-1] / portfolio_values.iloc[0] - 1
-    ann_return = (1 + total_return) ** (252 / len(portfolio_values)) - 1
+    if len(portfolio_values) > 1:
+        total_return = portfolio_values.iloc[-1] / portfolio_values.iloc[0] - 1
+        ann_return = (1 + total_return) ** (252 / len(portfolio_values)) - 1
+    else:
+        total_return = 0.0
+        ann_return = 0.0
     ann_vol = returns.std() * np.sqrt(252)
     sharpe = ann_return / ann_vol if ann_vol != 0 else np.nan
     
@@ -45,11 +54,11 @@ def analyze_performance(cerebro: bt.Cerebro, data_feeds: Dict[str, bt.feeds.Pand
         'Annualized Return': ann_return,
         'Annualized Volatility': ann_vol,
         'Sharpe Ratio': sharpe,
-        'Max Drawdown': drawdown.min(),
-        'Win Rate': 0,  # No trades in this period
-        'Profit Factor': float('inf'),  # No trades in this period
-        'Average Trade': 0,  # No trades in this period
-        'Number of Trades': 0  # No trades in this period
+        'Max Drawdown': float(drawdown.min()) if len(drawdown) else 0.0,
+        'Win Rate': 0,
+        'Profit Factor': float('inf'),
+        'Average Trade': 0,
+        'Number of Trades': trade_analyzer.get('total', {}).get('total', 0) if isinstance(trade_analyzer, dict) else 0
     }
     
     return metrics, drawdown

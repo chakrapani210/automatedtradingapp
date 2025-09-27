@@ -1,0 +1,2 @@
+date,signal,event_type,close,rsi,macd,ema,composite_score,bull_components,total_components,confidence,effective_risk_fraction,realized_vol
+2024-10-01,-1,SELL,225.162109375,,,,0.0,0,5,0.5,,

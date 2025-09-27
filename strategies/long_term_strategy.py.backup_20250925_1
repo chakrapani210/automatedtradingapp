@@ -1,0 +1,252 @@
+import pandas as pd
+import numpy as np
+from typing import Any, Optional, Dict
+from .strategy_interface import TradingStrategy
+import yfinance as yf
+from datetime import datetime, timedelta
+import os
+
+class LongTermValueStrategy(TradingStrategy):
+    """Enhanced long-term value & trend strategy.
+
+    Improvements vs original:
+      - Avoid mutating source DataFrame in place (work on a copy).
+      - Fundamental data cached per ticker with refresh interval to avoid repeated network calls each bar.
+      - Composite scoring (Value + Trend + Accumulation + Volume Confirmation) gating entries.
+      - ATR-based position sizing hook (still returns capital * max_position_size, but ATR computed & exposed).
+      - Cleaner golden/death cross detection and volume/accumulation confirmation.
+    """
+
+    FUND_REFRESH_DAYS = 7
+
+    def __init__(self):
+        self.last_rebalance_date: Optional[pd.Timestamp] = None
+        self._fund_cache: Dict[str, Dict[str, Any]] = {}
+        self._fund_timestamp: Dict[str, datetime] = {}
+        self._diagnostics: Dict[str, pd.DataFrame] = {}
+
+    def _record_diag_row(self, ticker: str, row_dt: pd.Timestamp, row: Dict[str, Any]):
+        """Accumulate per-bar diagnostics into in-memory DataFrame for later export."""
+        try:
+            if ticker not in self._diagnostics:
+                self._diagnostics[ticker] = pd.DataFrame(columns=list(row.keys()))
+            self._diagnostics[ticker].loc[row_dt] = row
+        except Exception:
+            pass
+
+    def export_diagnostics(self, out_dir: str = 'analysis_output'):
+        os.makedirs(out_dir, exist_ok=True)
+        for t, df in self._diagnostics.items():
+            try:
+                df.sort_index().to_csv(f"{out_dir}/long_term_diagnostics_{t}.csv")
+            except Exception:
+                continue
+
+    # -------- Fundamentals --------
+    def _fetch_fundamentals(self, ticker: str) -> Dict[str, Any]:
+        try:
+            stock = yf.Ticker(ticker)
+            info = getattr(stock, 'info', {}) or {}
+        except Exception:
+            info = {}
+        return {
+            'pe_ratio': info.get('forwardPE', float('inf')),
+            'pb_ratio': info.get('priceToBook', float('inf')),
+            'dividend_yield': info.get('dividendYield', 0) or 0,
+            'market_cap': info.get('marketCap', 0) or 0
+        }
+
+    def get_fundamental_data(self, ticker: str) -> Dict[str, Any]:
+        now = datetime.utcnow()
+        ts = self._fund_timestamp.get(ticker)
+        if ts is None or (now - ts) > timedelta(days=self.FUND_REFRESH_DAYS):
+            data = self._fetch_fundamentals(ticker)
+            self._fund_cache[ticker] = data
+            self._fund_timestamp[ticker] = now
+        return self._fund_cache.get(ticker, {})
+
+    # -------- Core Signal Logic --------
+    def generate_signals(self, data: pd.DataFrame, config: Any) -> pd.Series:
+        # Acquire working df (multi-strategy wrapper passes a DataFrame with attrs['ticker'])
+        df_in = next(iter(data.values())) if isinstance(data, dict) else data
+        ticker = getattr(df_in, 'attrs', {}).get('ticker') or 'UNKNOWN'
+        df = df_in.copy()
+        if df.empty:
+            return pd.Series(0, index=df.index)
+
+        # Optional entry debug
+        if os.getenv('LONGTERM_DEBUG', '').lower() in ('1', 'true', 'yes'):
+            try:
+                print(f"[LONGTERM_DEBUG] enter generate_signals ticker={ticker} rows={len(df)}")
+            except Exception:
+                pass
+
+        # ---- Config params ----
+        cfg = getattr(config, 'strategy', config)
+        pe_max = getattr(cfg, 'pe_ratio_max', 25.0)
+        pb_max = getattr(cfg, 'pb_ratio_max', 3.0)
+        div_min = getattr(cfg, 'dividend_yield_min', 0.0)
+        mcap_min = getattr(cfg, 'market_cap_min', 0)
+        w_trend = getattr(cfg, 'composite_trend_weight', 0.5)
+        w_adl = getattr(cfg, 'composite_adl_weight', 0.3)
+        w_vol = getattr(cfg, 'composite_volume_weight', 0.2)
+        comp_thr_cfg = getattr(cfg, 'composite_entry_threshold', 0.50)
+        persistent_days = getattr(cfg, 'composite_persistent_days', 5)
+        vol_confirm_factor = getattr(cfg, 'golden_volume_confirm_factor', 1.2)
+        value_min_fraction = getattr(cfg, 'value_min_fraction', 0.5)
+
+        # ---- Technical indicators ----
+        df['sma_50'] = df['Close'].rolling(50).mean()
+        sma_200 = df['Close'].rolling(200).mean()
+        sma_150 = df['Close'].rolling(150).mean()
+        sma_100 = df['Close'].rolling(100).mean()
+        df['sma_200'] = sma_200
+        df['trend_baseline'] = sma_200.fillna(sma_150).fillna(sma_100)
+        df['golden'] = (df['sma_50'] > df['trend_baseline']).astype(int)
+        df['golden_shift'] = df['golden'].shift(1).fillna(0)
+
+        # Volume / Accumulation
+        df['vol_ma_50'] = df['Volume'].rolling(50).mean()
+        range_span = (df['High'] - df['Low']).replace(0, np.nan)
+        df['adl_raw'] = (((df['Close'] - df['Low']) - (df['High'] - df['Close'])) / range_span) * df['Volume']
+        df['adl'] = df['adl_raw'].fillna(0).cumsum()
+        df['adl_ma_50'] = df['adl'].rolling(50).mean()
+        df['vpt'] = ((df['Close'].pct_change().fillna(0)) * df['Volume']).cumsum()
+
+        # ATR (14)
+        tr = pd.concat([
+            (df['High'] - df['Low']).abs(),
+            (df['High'] - df['Close'].shift(1)).abs(),
+            (df['Low'] - df['Close'].shift(1)).abs()
+        ], axis=1).max(axis=1)
+        df['atr_14'] = tr.rolling(14).mean()
+
+        # ---- Fundamentals ----
+        fundamentals = self.get_fundamental_data(ticker)
+        crit_hits = [
+            fundamentals.get('pe_ratio', float('inf')) < pe_max,
+            fundamentals.get('pb_ratio', float('inf')) < pb_max,
+            fundamentals.get('dividend_yield', 0) >= div_min,
+            fundamentals.get('market_cap', 0) >= mcap_min
+        ]
+        score_value = sum(crit_hits) / 4.0
+        value_ok = score_value >= value_min_fraction
+
+        # ---- Composite scoring components ----
+        trend_score = np.clip((df['sma_50'] - df['sma_200']) / df['sma_200'].replace(0, np.nan), -0.1, 0.1) / 0.1
+        trend_score = (trend_score + 1) / 2.0  # map -1..1 -> 0..1
+        adl_slope = df['adl'].diff(10)
+        adl_score = (adl_slope > 0).astype(int) * (
+            adl_slope.clip(lower=0) / (adl_slope.clip(lower=0).rolling(100).max() + 1e-9)
+        )
+        vol_score = (df['Volume'] / (df['vol_ma_50'] + 1e-9)).clip(0, 3) / 3
+
+        base_comp = (
+            w_trend * trend_score +
+            w_adl * adl_score.fillna(0) +
+            w_vol * vol_score.fillna(0)
+        )
+        composite = base_comp * score_value  # scale by fundamentals fraction (not hard gate)
+        df['composite_score'] = composite
+
+        signals = pd.Series(0, index=df.index)
+        comp_thr = comp_thr_cfg
+        persistent_gc_bars = persistent_days
+
+        # ---- Iterative signal generation ----
+        for i in range(1, len(df)):
+            golden_event = df['golden'].iloc[i] == 1 and df['golden_shift'].iloc[i] == 0
+            strong_volume = df['Volume'].iloc[i] > (df['vol_ma_50'].iloc[i] * vol_confirm_factor)
+            rising_vpt = df['vpt'].iloc[i] > df['vpt'].iloc[i - 1]
+
+            # Pseudo golden cross during early baseline formation
+            pseudo_golden = False
+            if np.isnan(df['trend_baseline'].iloc[i]) and i >= 3:
+                rises = (df['sma_50'].iloc[i - 3:i + 1].diff().fillna(0) > 0).sum() >= 3
+                pseudo_golden = rises and df['sma_50'].iloc[i] > df['sma_50'].iloc[i - 3]
+
+            if (
+                value_ok and (golden_event or pseudo_golden) and strong_volume and rising_vpt and
+                df['composite_score'].iloc[i] >= comp_thr
+            ):
+                signals.iloc[i] = 1
+            elif value_ok and df['golden'].iloc[i] == 1 and df['composite_score'].iloc[i] >= (comp_thr - 0.05):
+                start = max(0, i - persistent_gc_bars + 1)
+                if df['golden'].iloc[start:i + 1].all():
+                    signals.iloc[i] = 1
+
+            # Exits
+            death_cross = df['golden'].iloc[i] == 0 and df['golden_shift'].iloc[i] == 1
+            vol_spike = df['Volume'].iloc[i] > df['vol_ma_50'].iloc[i] * 2.0
+            if death_cross or vol_spike:
+                signals.iloc[i] = -1
+
+            # Debug snapshot
+            if os.getenv('LONGTERM_DEBUG', '').lower() in ('1', 'true', 'yes') and i % 15 == 0:
+                try:
+                    print(
+                        f"[LONGTERM_DEBUG] {ticker} i={i} comp={df['composite_score'].iloc[i]:.3f} "
+                        f"value_frac={score_value:.2f} golden={df['golden'].iloc[i]} pseudo={int(pseudo_golden)} "
+                        f"vol_mult={(df['Volume'].iloc[i] / (df['vol_ma_50'].iloc[i] + 1e-9)):.2f} strong_vol={int(strong_volume)}"
+                    )
+                except Exception:
+                    pass
+
+            # Diagnostics row
+            self._record_diag_row(
+                ticker,
+                df.index[i],
+                {
+                    'close': df['Close'].iloc[i],
+                    'sma_50': df['sma_50'].iloc[i],
+                    'trend_baseline': df['trend_baseline'].iloc[i],
+                    'golden': df['golden'].iloc[i],
+                    'pseudo_golden': int(pseudo_golden),
+                    'value_fraction': score_value,
+                    'composite_score': df['composite_score'].iloc[i],
+                    'volume': df['Volume'].iloc[i],
+                    'vol_ma_50': df['vol_ma_50'].iloc[i],
+                    'vol_mult': (df['Volume'].iloc[i] / (df['vol_ma_50'].iloc[i] + 1e-9)),
+                    'adl': df['adl'].iloc[i],
+                    'adl_ma_50': df['adl_ma_50'].iloc[i],
+                    'vpt': df['vpt'].iloc[i],
+                    'atr_14': df['atr_14'].iloc[i],
+                    'buy_signal': int(signals.iloc[i] == 1),
+                    'sell_signal': int(signals.iloc[i] == -1)
+                }
+            )
+
+        self._last_composite = float(df['composite_score'].iloc[-1]) if len(df) else 0.0
+        return signals
+
+    def calculate_position_size(self, data: pd.DataFrame, capital: float, config: Any) -> float:
+        """ATR-aware position size (simple placeholder).
+
+        Currently: return min(capital * max_position_size, capital) (no leverage) but compute ATR so we could
+        later do: position_dollars = risk_per_trade * capital / (ATR_pct).
+        """
+        cfg = getattr(config, 'strategy', config)
+        max_pos = getattr(cfg, 'max_position_size', 0.15)
+        df = next(iter(data.values())) if isinstance(data, dict) else data
+        if 'atr_14' in df.columns and len(df['atr_14'].dropna()) > 0 and df['Close'].iloc[-1] > 0:
+            atr = df['atr_14'].iloc[-1]
+            atr_pct = atr / df['Close'].iloc[-1]
+            # Risk-based sizing example (not yet enforcing): risk_cap = capital * cfg.risk_per_trade
+            # shares = (risk_cap / (atr * k))  -> convert to dollars later; left as future enhancement.
+        return capital * max_pos
+
+    def get_stop_loss(self, data: pd.DataFrame, entry_price: float, position_type: str, config: Any) -> float:
+        """Return a 5% static stop pending future ATR / trailing integration."""
+        stop_loss_pct = 0.05
+        if position_type == 'long':
+            return entry_price * (1 - stop_loss_pct)
+        return entry_price * (1 + stop_loss_pct)
+
+    def should_rebalance(self, current_date: pd.Timestamp, last_rebalance: Optional[pd.Timestamp], config: Any) -> bool:
+        """Check if portfolio should be rebalanced (monthly)"""
+        if last_rebalance is None:
+            return True
+            
+        # Rebalance monthly
+        return (current_date.year != last_rebalance.year or
+                current_date.month != last_rebalance.month)

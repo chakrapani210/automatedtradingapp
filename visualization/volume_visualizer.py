@@ -10,7 +10,8 @@ class VolumeVisualizer:
         """Create volume profile visualization"""
         # Calculate volume profile
         price_bins = pd.qcut(data['Close'], bins)
-        volume_profile = data.groupby(price_bins)['Volume'].sum()
+        # Explicit observed=False to silence future pandas warning
+        volume_profile = data.groupby(price_bins, observed=False)['Volume'].sum()
         
         # Create horizontal bar chart
         fig = go.Figure(go.Bar(
@@ -27,7 +28,6 @@ class VolumeVisualizer:
             yaxis_title='Price Levels',
             showlegend=True
         )
-        
         return fig
     
     @staticmethod

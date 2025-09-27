@@ -1,0 +1,30 @@
+long_term:
+  enabled: true
+  sma_window: 50
+  sma_long_window: 200
+  pe_ratio_max: 25.0
+  pb_ratio_max: 3.0
+  dividend_yield_min: 0.02
+  market_cap_min: 10000000000
+  risk_per_trade: 0.01
+  max_position_size: 0.15
+  # Externalized technical confirmation & sizing controls
+  confirm_window: 3          # bars after golden cross to allow confirmation
+  aroon_up_min: 60           # min aroon up for confirmation
+  aroon_down_max: 60         # max aroon down for confirmation
+  max_position_fraction: 0.15  # fraction of capital to allocate (alias of max_position_size)
+  use_fraction_cap: true
+  atr_period: 14
+  atr_stop_multiplier: 3.0
+  trailing_stop: true
+  trailing_stop_atr: 4.0
+  entry_threshold: 0.02
+  exit_threshold: 0.02
+  holding_period_min: 30
+  composite_trend_weight: 0.5
+  composite_adl_weight: 0.3
+  composite_volume_weight: 0.2
+  composite_entry_threshold: 0.50
+  composite_persistent_days: 5
+  golden_volume_confirm_factor: 1.2
+  value_min_fraction: 0.5

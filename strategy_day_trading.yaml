@@ -1,0 +1,66 @@
+day_trading:
+  enabled: true
+  # Indicator Parameters
+  rsi_window: 14
+  rsi_oversold: 30
+  rsi_overbought: 70
+  macd_fast: 12
+  macd_slow: 26
+  macd_signal: 9
+  bb_period: 20
+  bb_dev: 2.0
+  ema_period: 20
+  volume_ma_window: 20
+  # Composite Scoring
+  enable_composite: true
+  buy_score_threshold: 0.50
+  sell_score_threshold: 0.50
+  min_components: 1
+  component_weights:
+    rsi: 1.0
+    macd: 1.0
+    bb: 1.0
+    ema: 1.0
+    volume: 1.0
+  high_priority_components: []
+  override_threshold: 0.60
+  # Component Enables
+  enable_rsi_component: true
+  enable_macd_component: true
+  enable_bb_component: true
+  enable_ema_component: true
+  enable_volume_component: true
+  # Reliability and Pruning
+  enable_reliability_pruning: true
+  reliability_prune_threshold: 0.40
+  reliability_prune_consecutive: 5
+  reactivation_threshold: 0.52
+  reactivation_consecutive: 4
+  min_history_for_prune: 80
+  max_pruned_fraction: 0.50
+  prune_grace_bars: 20
+  instability_prune_threshold: null
+  protected_components: null
+  reliability_smoothing: 0.18
+  warmup_bars_for_reliability: 40
+  reliability_floor: 0.30
+  reliability_regression_to_mean: 0.02
+  instability_lookback: 15
+  instability_penalty: 0.35
+  micro_move_threshold: 0.002
+  # Sizing and Risk
+  risk_per_trade: 0.01
+  max_position_fraction: 0.20
+  min_position_shares: 1
+  atr_stop_multiplier: 2.0
+  use_confidence_for_sizing: true
+  confidence_blend_weight: 0.50
+  min_confidence: 0.40
+  full_confidence: 0.80
+  confidence_floor_fraction: 0.25
+  enable_drawdown_dampening: true
+  drawdown_dampening_threshold: 0.10
+  drawdown_dampening_factor: 0.50
+  enable_volatility_gate: true
+  vol_gate_atr_pct: 0.075
+  vol_gate_confidence_penalty: 0.08

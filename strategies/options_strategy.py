@@ -25,13 +25,45 @@ class OptionsStrategy(TradingStrategy):
         return signals
 
     def calculate_position_size(self, data: pd.DataFrame, capital: float, config: Any) -> float:
-        """Calculate position size for options"""
-        # Use smaller position sizes for options due to leverage
-        base_position = capital * 0.05  # Start with 5% of capital
-        
-        # Adjust based on implied volatility if available
-        # For now, using a conservative fixed size
-        return min(base_position, capital * 0.1)  # Cap at 10% of capital
+        """Advanced position sizing for options strategy.
+
+        Logic:
+          1. Base risk fraction (risk_per_trade) of capital.
+          2. Scale with realized volatility (annualized) between vol_low_threshold and vol_high_threshold.
+             - Below low: full base size.
+             - Above high: floor fraction (vol_floor_fraction) of base size.
+             - Linear interpolation between.
+          3. Apply hard caps: max_position_fraction and max_position_size (legacy field) if present.
+        """
+        strat_cfg = getattr(config, 'strategy', config)
+        risk_per_trade = getattr(strat_cfg, 'risk_per_trade', 0.01)
+        scale_with_vol = getattr(strat_cfg, 'scale_with_vol', True)
+        vol_low = getattr(strat_cfg, 'vol_low_threshold', 0.15)
+        vol_high = getattr(strat_cfg, 'vol_high_threshold', 0.30)
+        vol_floor = getattr(strat_cfg, 'vol_floor_fraction', 0.30)
+        max_pos_frac = getattr(strat_cfg, 'max_position_fraction', getattr(strat_cfg, 'max_position_size', 0.05))
+
+        # Realized volatility
+        returns = data['Close'].pct_change()
+        realized_vol = returns.rolling(window=20).std().iloc[-1] * (252 ** 0.5) if len(returns) >= 20 else 0.0
+
+        base_notional = capital * risk_per_trade
+        scale = 1.0
+        if scale_with_vol and realized_vol > 0:
+            if realized_vol <= vol_low:
+                scale = 1.0
+            elif realized_vol >= vol_high:
+                scale = vol_floor
+            else:
+                # linear interpolation high -> low size
+                span = vol_high - vol_low if vol_high > vol_low else 1.0
+                rel = (realized_vol - vol_low) / span
+                scale = 1.0 - rel * (1.0 - vol_floor)
+        sized_notional = base_notional * scale
+        cap_notional = capital * max_pos_frac
+        final_notional = min(sized_notional, cap_notional)
+        # Return dollar notional (framework above converts to shares/contracts externally)
+        return max(0.0, final_notional)
 
     def get_stop_loss(self, data: pd.DataFrame, entry_price: float, position_type: str, config: Any) -> float:
         """Calculate stop loss level for options positions"""
